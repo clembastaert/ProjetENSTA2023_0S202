@@ -16,6 +16,10 @@ namespace Numeric
     solve_RK4_movable_vortices( double dt, CartesianGridOfSpeed& t_velocity, 
                                 Simulation::Vortices& t_vortices, 
                                 Geometry::CloudOfPoints const& t_points );
+
+    void  Calcul_Vortexs_VelocityField(double dt,
+                                           CartesianGridOfSpeed &t_velocity,
+                                           Simulation::Vortices &t_vortices);
 }
 
 #endif

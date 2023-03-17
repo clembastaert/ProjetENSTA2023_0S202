@@ -29,6 +29,7 @@ Numeric::solve_RK4_fixed_vortices( double dt, CartesianGridOfSpeed const& t_velo
         vector v4 = t_velocity.computeVelocityFor(p3);
         newCloud[iPoint] = t_velocity.updatePosition(p + onesixth*dt*(v1+2.*v2+2.*v3+v4));
     }
+    
     return newCloud;
 }
 
@@ -61,7 +62,6 @@ Numeric::solve_RK4_movable_vortices( double dt, CartesianGridOfSpeed& t_velocity
     }
     std::vector<point> newVortexCenter;
     newVortexCenter.reserve(t_vortices.numberOfVortices());
-    #pragma omp parallel for // ajout de la directive OpenMP
     for (std::size_t iVortex=0; iVortex<t_vortices.numberOfVortices(); ++iVortex)
     {
         point p = t_vortices.getCenter(iVortex);
@@ -77,17 +77,12 @@ Numeric::solve_RK4_movable_vortices( double dt, CartesianGridOfSpeed& t_velocity
         vector v4 = t_vortices.computeSpeed(p3);
         newVortexCenter.emplace_back(t_velocity.updatePosition(p + onesixth*dt*(v1+2.*v2+2.*v3+v4)));
     }
+    #pragma omp parallel for 
     for (std::size_t iVortex=0; iVortex<t_vortices.numberOfVortices(); ++iVortex)
     {
         t_vortices.setVortex(iVortex, newVortexCenter[iVortex], 
                              t_vortices.getIntensity(iVortex));
     }
-
-    //La dernière boucle dans la fonction solve_RK4_movable_vortices() n'est pas parallélisable 
-    //car elle a des dépendances avec les boucles précédentes. En effet, les positions mises à 
-    //jour des centres de vortex dans cette boucle sont calculées à partir des vitesses calculées 
-    //dans les boucles précédentes. Par conséquent, l'ordre des mises à jour est important et ne 
-    //peut pas être parallélisé sans introduire des conflits et des résultats incorrects.
     
     t_velocity.updateVelocityField(t_vortices);
     return newCloud;

@@ -1,5 +1,11 @@
+////////////////////////////////////
+// parallélisation du calcul du déplacement des points
+// Fonctionne pour isMobile = 0 et isMobile = 1
+////////////////////////////////////
+
 #include "cartesian_grid_of_speed.hpp"
 #include "cloud_of_points.hpp"
+#include "point.hpp"
 #include "runge_kutta.hpp"
 #include "screen.hpp"
 #include "vortex.hpp"
@@ -92,6 +98,8 @@ int main(int nargs, char *argv[]) {
   MPI_Comm commGlob;
   int nbp, rank, flag;
   MPI_Init(&nargs, &argv);
+  printf("nargs = %d\n", nargs);
+  printf("argv[4] = %s\n", *argv);
   MPI_Comm_dup(MPI_COMM_WORLD, &commGlob);
   MPI_Comm_size(commGlob, &nbp);
   MPI_Comm_rank(commGlob, &rank);
@@ -123,7 +131,8 @@ int main(int nargs, char *argv[]) {
   std::cout << "######## Vortex simultor ########" << std::endl << std::endl;
   std::cout << "Press P for play animation " << std::endl;
   std::cout << "Press S to stop animation" << std::endl;
-  std::cout << "Press right cursor to advance step by step in time" << std::endl;
+  std::cout << "Press right cursor to advance step by step in time"
+            << std::endl;
   std::cout << "Press down cursor to halve the time step" << std::endl;
   std::cout << "Press up cursor to double the time step" << std::endl;
 
@@ -133,9 +142,18 @@ int main(int nargs, char *argv[]) {
   bool advance = false;
   bool run_calcul = true;
   double dt = 0.1;
-  std::vector<double> dataVect;
 
   bool receive_data = false;
+
+  int sizeBuffers = cloud.numberOfPoints() / (nbp - 1);
+  int sizeLastBuffers = cloud.numberOfPoints() - (nbp - 2) * sizeBuffers;
+  std::vector<double> partialDataVect;
+  partialDataVect.resize(sizeBuffers * 2);
+
+  std::vector<double> gridVect;
+  gridVect.resize(grid.size() * 2);
+
+  MPI_Request req;
 
   if (rank == 0) {
     Graphisme::Screen myScreen(
@@ -156,7 +174,9 @@ int main(int nargs, char *argv[]) {
           run_calcul = false;
           animate = false;
           advance = false;
-          MPI_Send(&run_calcul, 1, MPI_LOGICAL, 1, 20, commGlob);
+          for (int iProc = 1; iProc < nbp; ++iProc) {
+            MPI_Send(&run_calcul, 1, MPI_LOGICAL, iProc, 20, commGlob);
+          }
         }
         if (event.type == sf::Event::Resized) {
           // on met à jour la vue, avec la nouvelle taille de la fenêtre
@@ -170,11 +190,15 @@ int main(int nargs, char *argv[]) {
         }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) {
           dt *= 2;
-          MPI_Send(&dt, 1, MPI_DOUBLE, 1, 22, commGlob);
+          for (int iProc = 1; iProc < nbp; ++iProc) {
+            MPI_Send(&dt, 1, MPI_DOUBLE, iProc, 22, commGlob);
+          }
         }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) {
           dt /= 2;
-          MPI_Send(&dt, 1, MPI_DOUBLE, 1, 22, commGlob);
+          for (int iProc = 1; iProc < nbp; ++iProc) {
+            MPI_Send(&dt, 1, MPI_DOUBLE, iProc, 22, commGlob);
+          }
         }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
           advance = true;
@@ -188,24 +212,46 @@ int main(int nargs, char *argv[]) {
 
       if (receive_data) {
 
-        // On demande au processus 1 d'envoyer les données
-        MPI_Send(&receive_data, 1, MPI_LOGICAL, 1, 11, commGlob);
-        // On reçoit les données du processus 1
-
-        if (isMobile) {
-          MPI_Recv(&grid.data()[0], grid.size(), MPI_DOUBLE, 1, 0, commGlob,
-                 MPI_STATUS_IGNORE);
-          MPI_Recv(&vortices.data()[0], vortices.numberOfVortices(), MPI_DOUBLE, 1, 1, commGlob,
-                 MPI_STATUS_IGNORE);
-          MPI_Recv(&cloud.data()[0], cloud.numberOfPoints(), MPI_DOUBLE, 1, 2, commGlob,
-                 MPI_STATUS_IGNORE);
-          }
-
-        } else {
-
-          MPI_Recv(&cloud.data()[0], cloud.numberOfPoints(), MPI_DOUBLE, 1, 2, commGlob,
-                 MPI_STATUS_IGNORE);
+        gridVect.clear();
+        for (std::size_t i = 0; i < grid.size(); ++i) {
+          gridVect.push_back(grid[i].x);
+          gridVect.push_back(grid[i].y);
         }
+
+        // On demande aux processus de calcul d'envoyer leurs données
+        for (int i = 1; i < nbp; ++i) {
+          MPI_Isend(&gridVect[0], grid.size() * 2, MPI_DOUBLE, i, 11, commGlob,
+                    &req);
+        }
+        MPI_Wait(&req, MPI_STATUS_IGNORE);
+
+        partialDataVect.clear();
+        partialDataVect.resize(sizeBuffers * 2);
+        for (int iProc = 1; iProc < nbp - 1; ++iProc) {
+
+          MPI_Recv(&partialDataVect[0], sizeBuffers * 2, MPI_DOUBLE, iProc, 10,
+                   commGlob, MPI_STATUS_IGNORE);
+
+          for (int iPoint = 0; iPoint < sizeBuffers; ++iPoint) {
+            int p = (iProc - 1) * sizeBuffers + iPoint;
+
+            cloud[p].x = partialDataVect[2 * iPoint];
+            cloud[p].y = partialDataVect[2 * iPoint + 1];
+          }
+        }
+
+        partialDataVect.resize(sizeLastBuffers * 2);
+        MPI_Recv(&partialDataVect[0], sizeLastBuffers * 2, MPI_DOUBLE, nbp - 1,
+                 10, commGlob, MPI_STATUS_IGNORE);
+
+        for (int iPoint = 0; iPoint < sizeLastBuffers; ++iPoint) {
+          int p = (nbp - 2) * sizeBuffers + iPoint;
+
+          cloud[p].x = partialDataVect[2 * iPoint];
+          cloud[p].y = partialDataVect[2 * iPoint + 1];
+        }
+
+        Numeric::Calcul_Vortexs_VelocityField(dt, grid, vortices);
       }
 
       /* AFFICHAGE */
@@ -227,42 +273,90 @@ int main(int nargs, char *argv[]) {
     }
   }
 
-  else if (rank==1) {
+  else if (rank == nbp - 1) {
 
-    bool sendCalcul = false;
+    partialDataVect.resize(sizeLastBuffers * 2);
+
+    Geometry::CloudOfPoints partialCloud(sizeLastBuffers);
+    for (int iPoint = 0; iPoint < sizeLastBuffers; ++iPoint) {
+      partialCloud[iPoint] = cloud[sizeBuffers * (rank - 1) + iPoint];
+    }
 
     while (run_calcul) {
-      if (isMobile) {
-        cloud = Numeric::solve_RK4_movable_vortices(dt, grid, vortices, cloud);
 
-      } else {
-        cloud = Numeric::solve_RK4_fixed_vortices(dt, grid, cloud);
+      MPI_Iprobe(0, 20, commGlob, &flag, &status);
+      if (flag) {
+        MPI_Recv(&run_calcul, 1, MPI_LOGICAL, 0, 20, commGlob, &status);
+        break;
       }
 
-      sendCalcul = false;
-      while (!sendCalcul) {
+      MPI_Iprobe(0, 22, commGlob, &flag, &status);
+      if (flag) {
+        MPI_Recv(&dt, 1, MPI_DOUBLE, 0, 22, commGlob, &status);
+      }
 
-        MPI_Iprobe(0, 20, commGlob, &flag, &status);
-        if (flag) {
-          MPI_Recv(&run_calcul, 1, MPI_LOGICAL, 0, 20, commGlob, &status);
-          break;
+      MPI_Iprobe(0, 11, commGlob, &flag, &status);
+      if (flag) {
+        MPI_Recv(&gridVect[0], grid.size() * 2, MPI_DOUBLE, 0, 11, commGlob,
+                 &status);
+
+        for (std::size_t i = 0; i < grid.size(); ++i) {
+          grid[i].x = gridVect[2 * i];
+          grid[i].y = gridVect[2 * i + 1];
         }
 
-        MPI_Iprobe(0, 22, commGlob, &flag, &status);
-        if (flag) {
-          MPI_Recv(&dt, 1, MPI_DOUBLE, 0, 22, commGlob, &status);
+        partialCloud =
+            Numeric::solve_RK4_fixed_vortices(dt, grid, partialCloud);
+        partialDataVect.clear();
+        for (std::size_t i = 0; i < partialCloud.numberOfPoints(); ++i) {
+          partialDataVect.push_back(partialCloud[i].x);
+          partialDataVect.push_back(partialCloud[i].y);
         }
 
-        MPI_Iprobe(0, 11, commGlob, &flag, &status);
-        if (flag) {
-          MPI_Recv(&sendCalcul, 1, MPI_LOGICAL, 0, 11, commGlob, &status);
-          if (isMobile){
-            MPI_Send(&grid.data()[0], grid.size(), MPI_DOUBLE, 0, 0, commGlob);
-            MPI_Send(&vortices.data()[0], vortices.numberOfVortices(), MPI_DOUBLE, 0, 1, commGlob);
-            MPI_Send(&cloud.data()[0], cloud.numberOfPoints(), MPI_DOUBLE, 0, 2, commGlob);
-          }
-          else MPI_Send(&cloud.data()[0], cloud.numberOfPoints(), MPI_DOUBLE, 0, 2, commGlob);
+        MPI_Send(&partialDataVect[0], sizeLastBuffers * 2, MPI_DOUBLE, 0, 10,
+                 commGlob);
+      }
+    }
+  } else {
+
+    Geometry::CloudOfPoints partialCloud(sizeBuffers);
+    for (int iPoint = 0; iPoint < sizeBuffers; ++iPoint) {
+      partialCloud[iPoint] = cloud[sizeBuffers * (rank - 1) + iPoint];
+    }
+
+    while (run_calcul) {
+
+      MPI_Iprobe(0, 20, commGlob, &flag, &status);
+      if (flag) {
+        MPI_Recv(&run_calcul, 1, MPI_LOGICAL, 0, 20, commGlob, &status);
+        break;
+      }
+
+      MPI_Iprobe(0, 22, commGlob, &flag, &status);
+      if (flag) {
+        MPI_Recv(&dt, 1, MPI_DOUBLE, 0, 22, commGlob, &status);
+      }
+
+      MPI_Iprobe(0, 11, commGlob, &flag, &status);
+      if (flag) {
+        MPI_Recv(&gridVect[0], grid.size() * 2, MPI_DOUBLE, 0, 11, commGlob,
+                 &status);
+
+        for (std::size_t i = 0; i < grid.size(); ++i) {
+          grid[i].x = gridVect[2 * i];
+          grid[i].y = gridVect[2 * i + 1];
         }
+
+        partialCloud =
+            Numeric::solve_RK4_fixed_vortices(dt, grid, partialCloud);
+        partialDataVect.clear();
+        for (std::size_t i = 0; i < partialCloud.numberOfPoints(); ++i) {
+          partialDataVect.push_back(partialCloud[i].x);
+          partialDataVect.push_back(partialCloud[i].y);
+        }
+
+        MPI_Send(&partialDataVect[0], sizeBuffers * 2, MPI_DOUBLE, 0, 10,
+                 commGlob);
       }
     }
   }

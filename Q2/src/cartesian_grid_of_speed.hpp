@@ -108,13 +108,6 @@ namespace Numeric
         CartesianGridOfSpeed& operator = ( CartesianGridOfSpeed const& ) = default;
         CartesianGridOfSpeed& operator = ( CartesianGridOfSpeed     && ) = default;
 
-        size_t size() const {return m_velocityField.size();};
-
-        vector &operator[](std::size_t t_index) {
-            assert(t_index < m_velocityField.size());
-            return m_velocityField[t_index];
-        }
-
     private:
         std::size_t m_width, m_height;
         double      m_left, m_bottom;
