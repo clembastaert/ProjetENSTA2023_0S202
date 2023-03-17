@@ -125,7 +125,8 @@ int main( int nargs, char* argv[] )
     Graphisme::Screen myScreen( {resx,resy}, {grid.getLeftBottomVertex(), grid.getRightTopVertex()} );
     bool animate=false;
     double dt = 0.1;
-
+    double sum_fps=0;
+    int count=0;
     
     while (myScreen.isOpen())
     {
@@ -136,8 +137,10 @@ int main( int nargs, char* argv[] )
         while (myScreen.pollEvent(event))
         {
             // évènement "fermeture demandée" : on ferme la fenêtre
-            if (event.type == sf::Event::Closed)
+            if (event.type == sf::Event::Closed){
                 myScreen.close();
+                std::cout << sum_fps/count << std::endl;
+            }
             if (event.type == sf::Event::Resized)
             {
                 // on met à jour la vue, avec la nouvelle taille de la fenêtre
@@ -168,6 +171,8 @@ int main( int nargs, char* argv[] )
         auto end = std::chrono::system_clock::now();
         std::chrono::duration<double> diff = end - start;
         std::string str_fps = std::string("FPS : ") + std::to_string(1./diff.count());
+        sum_fps+=1/diff.count();
+        count++;
         myScreen.drawText(str_fps, Geometry::Point<double>{300, double(myScreen.getGeometry().second-96)});
         myScreen.display();
         
