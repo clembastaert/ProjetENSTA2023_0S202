@@ -142,6 +142,8 @@ int main(int nargs, char *argv[]) {
   bool advance = false;
   bool run_calcul = true;
   double dt = 0.1;
+  double sum_fps=0;
+  int count=0;
 
   bool receive_data = false;
 
@@ -174,6 +176,7 @@ int main(int nargs, char *argv[]) {
           run_calcul = false;
           animate = false;
           advance = false;
+          std::cout << sum_fps/count << std::endl;
           for (int iProc = 1; iProc < nbp; ++iProc) {
             MPI_Send(&run_calcul, 1, MPI_LOGICAL, iProc, 20, commGlob);
           }
@@ -266,6 +269,8 @@ int main(int nargs, char *argv[]) {
       std::chrono::duration<double> diff = end - start;
       std::string str_fps =
           std::string("FPS : ") + std::to_string(1. / diff.count());
+      count++;
+      sum_fps+=1/diff.count();
       myScreen.drawText(str_fps,
                         Geometry::Point<double>{
                             300, double(myScreen.getGeometry().second - 96)});

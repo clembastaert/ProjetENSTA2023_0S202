@@ -1,6 +1,6 @@
 # Configuration pour MAC OSX
 # Peut être modifié à votre convenance...
-CXX = g++
+CXX = mpic++
 CXXFLAGS = -std=c++17 -I/usr/local/include/ -I//usr/local/Cellar/libomp/15.0.7/include/
 ifdef DEBUG
 CXXFLAGS += -g -O0 -Wall -fbounds-check -pedantic -fsanitize=address -openmp
