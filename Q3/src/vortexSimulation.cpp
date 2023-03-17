@@ -1,8 +1,3 @@
-////////////////////////////////////
-// parallélisation du calcul du déplacement des points
-// Fonctionne pour isMobile = 0 et isMobile = 1
-////////////////////////////////////
-
 #include "cartesian_grid_of_speed.hpp"
 #include "cloud_of_points.hpp"
 #include "point.hpp"
@@ -228,15 +223,15 @@ int main(int nargs, char *argv[]) {
         MPI_Wait(&req, MPI_STATUS_IGNORE);
 
         partialDataVect.clear();
+        int p=0;
         for (int iProc = 1; iProc < nbp; ++iProc) {
           partialDataVect.resize(sizeBuffer[iProc] * 2);
           MPI_Recv(&partialDataVect[0], sizeBuffer[iProc] * 2, MPI_DOUBLE, iProc, 10,
                    commGlob, MPI_STATUS_IGNORE);
-
           for (int iPoint = 0; iPoint < sizeBuffer[iProc]; ++iPoint) {
-            int p = (iProc - 1) * sizeBuffer[iProc] + iPoint;
             cloud[p].x = partialDataVect[2 * iPoint];
             cloud[p].y = partialDataVect[2 * iPoint + 1];
+            p++;
           }
         }
         Numeric::Calcul_Vortexs_VelocityField(dt, grid, vortices);
@@ -264,8 +259,10 @@ int main(int nargs, char *argv[]) {
   else {
 
     Geometry::CloudOfPoints partialCloud(sizeBuffer[rank]);
+    int begin = 0;
+    for (int i=1;i<rank;i++) begin+= sizeBuffer[i];
     for (int iPoint = 0; iPoint < sizeBuffer[rank]; ++iPoint) {
-      partialCloud[iPoint] = cloud[sizeBuffer[rank] * (rank - 1) + iPoint];
+      partialCloud[iPoint] = cloud[begin + iPoint];
     }
 
     while (run_calcul) {
