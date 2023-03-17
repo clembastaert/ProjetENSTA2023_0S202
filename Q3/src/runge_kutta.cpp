@@ -56,29 +56,29 @@ Numeric::solve_RK4_movable_vortices( double dt, CartesianGridOfSpeed& t_velocity
         vector v4 = t_velocity.computeVelocityFor(p3);
         newCloud[iPoint] = t_velocity.updatePosition(p + onesixth*dt*(v1+2.*v2+2.*v3+v4));
     }
-    std::vector<point> newVortexCenter;
-    newVortexCenter.reserve(t_vortices.numberOfVortices());
-    for (std::size_t iVortex=0; iVortex<t_vortices.numberOfVortices(); ++iVortex)
-    {
-        point p = t_vortices.getCenter(iVortex);
-        vector v1 = t_vortices.computeSpeed(p);
-        point p1 = p + 0.5*dt*v1;
-        p1 = t_velocity.updatePosition(p1);
-        vector v2 = t_vortices.computeSpeed(p1);
-        point p2 = p + 0.5*dt*v2;
-        p2 = t_velocity.updatePosition(p2);
-        vector v3 = t_vortices.computeSpeed(p2);
-        point p3 = p + dt*v3;
-        p3 = t_velocity.updatePosition(p3);
-        vector v4 = t_vortices.computeSpeed(p3);
-        newVortexCenter.emplace_back(t_velocity.updatePosition(p + onesixth*dt*(v1+2.*v2+2.*v3+v4)));
-    }
-    for (std::size_t iVortex=0; iVortex<t_vortices.numberOfVortices(); ++iVortex)
-    {
-        t_vortices.setVortex(iVortex, newVortexCenter[iVortex], 
-                             t_vortices.getIntensity(iVortex));
-    }
-    t_velocity.updateVelocityField(t_vortices);
+    // std::vector<point> newVortexCenter;
+    // newVortexCenter.reserve(t_vortices.numberOfVortices());
+    // for (std::size_t iVortex=0; iVortex<t_vortices.numberOfVortices(); ++iVortex)
+    // {
+    //     point p = t_vortices.getCenter(iVortex);
+    //     vector v1 = t_vortices.computeSpeed(p);
+    //     point p1 = p + 0.5*dt*v1;
+    //     p1 = t_velocity.updatePosition(p1);
+    //     vector v2 = t_vortices.computeSpeed(p1);
+    //     point p2 = p + 0.5*dt*v2;
+    //     p2 = t_velocity.updatePosition(p2);
+    //     vector v3 = t_vortices.computeSpeed(p2);
+    //     point p3 = p + dt*v3;
+    //     p3 = t_velocity.updatePosition(p3);
+    //     vector v4 = t_vortices.computeSpeed(p3);
+    //     newVortexCenter.emplace_back(t_velocity.updatePosition(p + onesixth*dt*(v1+2.*v2+2.*v3+v4)));
+    // }
+    // for (std::size_t iVortex=0; iVortex<t_vortices.numberOfVortices(); ++iVortex)
+    // {
+    //     t_vortices.setVortex(iVortex, newVortexCenter[iVortex], 
+    //                          t_vortices.getIntensity(iVortex));
+    // }
+    // t_velocity.updateVelocityField(t_vortices);
     return newCloud;
 
 }
