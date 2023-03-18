@@ -199,7 +199,7 @@ int main(int nargs, char *argv[]) {
         }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) {
           advance = true;
-          MPI_Send(&advance, 1, MPI_LOGICAL, 1, 23, commGlob);
+
         }
       }
 
@@ -265,6 +265,14 @@ int main(int nargs, char *argv[]) {
       partialCloud[iPoint] = cloud[begin + iPoint];
     }
 
+    partialCloud =
+            Numeric::solve_RK4_fixed_vortices(dt, grid, partialCloud);
+        partialDataVect.clear();
+        for (std::size_t i = 0; i < partialCloud.numberOfPoints(); ++i) {
+          partialDataVect.push_back(partialCloud[i].x);
+          partialDataVect.push_back(partialCloud[i].y);
+        }
+
     while (run_calcul) {
 
       MPI_Iprobe(0, 20, commGlob, &flag, &status);
@@ -282,7 +290,8 @@ int main(int nargs, char *argv[]) {
       if (flag) {
         MPI_Recv(&gridVect[0], grid.size() * 2, MPI_DOUBLE, 0, 11, commGlob,
                  &status);
-
+        MPI_Send(&partialDataVect[0], sizeBuffer[rank] * 2, MPI_DOUBLE, 0, 10,
+                 commGlob);
         for (std::size_t i = 0; i < grid.size(); ++i) {
           grid[i].x = gridVect[2 * i];
           grid[i].y = gridVect[2 * i + 1];
@@ -294,10 +303,7 @@ int main(int nargs, char *argv[]) {
         for (std::size_t i = 0; i < partialCloud.numberOfPoints(); ++i) {
           partialDataVect.push_back(partialCloud[i].x);
           partialDataVect.push_back(partialCloud[i].y);
-        }
-
-        MPI_Send(&partialDataVect[0], sizeBuffer[rank] * 2, MPI_DOUBLE, 0, 10,
-                 commGlob);
+        }     
       }
     }
   }
